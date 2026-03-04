@@ -31,7 +31,7 @@ function calcFR({dept, pal, prem, tgt, rdv, adr, month, elec, gasoil, gaz, suret
   if (idx === -1) return { err: "Maximum 6 palettes" };
   const b = FR_T[dept][idx]; if (!b) return { err: "Tarif indisponible" };
   const ff=2.05, pc=prem?Math.max(b*0.30,30):0, tc=tgt?Math.min(Math.max(b*0.15,25),40):0, rc=rdv?5:0;
-  const ac=adr?1.45:0;
+  // ADR is 15%, calculated below after subtotal
   const dC=dept.substring(0,2), isSeas=SEAS.includes(dC), inSeas=month>=4&&month<=8;
   const sc=(isSeas&&inSeas)?Math.round(b*0.15*100)/100:0;
   // Energy applies on PORT ONLY (base tariff b), NOT on subtotal
@@ -41,8 +41,11 @@ function calcFR({dept, pal, prem, tgt, rdv, adr, month, elec, gasoil, gaz, suret
   const factu = 5.00;
   // Sûreté optionnelle
   const sc2 = surete ? 0.70 : 0;
-  // Sous-total = port + frais fixes + options + saison + ADR
-  const sub = b + ff + pc + tc + rc + ac + sc;
+  // Sous-total avant ADR = port + frais fixes + options + saison
+  const subBeforeAdr = b + ff + pc + tc + rc + sc;
+  // ADR = 15% du montant de l'expédition (sous-total)
+  const ac = adr ? Math.round(subBeforeAdr * 0.15 * 100) / 100 : 0;
+  const sub = subBeforeAdr + ac;
   // Total HT = sous-total + énergie (sur port) + facturation + sûreté
   const totHT = Math.round((sub + ec + factu + sc2) * 100) / 100;
   // TVA 20% pour France
@@ -668,7 +671,7 @@ export default function XPOCalculator() {
                 <Toggle on={prem} onChange={() => setPrem(!prem)} label="Premium" desc="+ 30% (min 30€)" />
                 <Toggle on={tgt} onChange={() => setTgt(!tgt)} label="TGT Express" desc="+ 15% (25-40€)" />
                 <Toggle on={rdv} onChange={() => setRdv(!rdv)} label="Rendez-vous" desc="+ 5.00€" />
-                <Toggle on={adr} onChange={() => setAdr(!adr)} label="ADR Matières dangereuses" desc="+ 1.45€ / expédition" />
+                <Toggle on={adr} onChange={() => setAdr(!adr)} label="ADR Matières dangereuses" desc="+ 15% du montant" />
                 <Toggle on={surete} onChange={() => setSurete(!surete)} label="Contribution sûreté" desc="+ 0.70€ / expédition" />
               </div>
             </GlassCard>
@@ -703,7 +706,7 @@ export default function XPOCalculator() {
                   {frResult.pc > 0 && <ResultLine label="Premium" value={frResult.pc.toFixed(2) + ' €'} />}
                   {frResult.tc > 0 && <ResultLine label="TGT Express" value={frResult.tc.toFixed(2) + ' €'} />}
                   {frResult.rc > 0 && <ResultLine label="Rendez-vous" value={frResult.rc.toFixed(2) + ' €'} />}
-                  {frResult.ac > 0 && <ResultLine label="⚠️ ADR Matières dangereuses" value={frResult.ac.toFixed(2) + ' €'} accent />}
+                  {frResult.ac > 0 && <ResultLine label="⚠️ ADR Matières dangereuses (15%)" value={frResult.ac.toFixed(2) + ' €'} accent />}
                   {frResult.sc > 0 && <ResultLine label="🌊 Surtaxe saisonnière" value={frResult.sc.toFixed(2) + ' €'} accent />}
                   <ResultLine label={`Énergie (${frResult.energyRate.toFixed(2)}% sur port)`} value={frResult.ec.toFixed(2) + ' €'} />
                   <ResultLine label="Frais de facturation" value={frResult.factu.toFixed(2) + ' €'} />
@@ -845,7 +848,7 @@ export default function XPOCalculator() {
                   </span>
                 </div>
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <Toggle on={adrIntl} onChange={() => setAdrIntl(!adrIntl)} label="ADR Matières dangereuses" desc="+ 1.45€ / expédition" />
+                  <Toggle on={adrIntl} onChange={() => setAdrIntl(!adrIntl)} label="ADR Matières dangereuses" desc="+ 15% du montant" />
                   <Toggle on={sureteIntl} onChange={() => setSureteIntl(!sureteIntl)} label="Contribution sûreté" desc="+ 0.70€ / expédition" />
                 </div>
               </GlassCard>
@@ -858,7 +861,7 @@ export default function XPOCalculator() {
               const ecIntl = Math.round(basePrice * intlEnergyRate / 100 * 100) / 100;
               const factuIntl = 5.00;
               const sc2Intl = sureteIntl ? 0.70 : 0;
-              const acIntl = adrIntl ? 1.45 : 0;
+              const acIntl = adrIntl ? Math.round(basePrice * 0.15 * 100) / 100 : 0;
               const totalHT = Math.round((basePrice + ecIntl + factuIntl + sc2Intl + acIntl) * 100) / 100;
               // International = TVA exonérée (intracommunautaire ou export)
               return (
@@ -868,7 +871,7 @@ export default function XPOCalculator() {
                   <ResultLine label="Prix transport grille" value={basePrice.toFixed(2) + ' €'} />
                   <ResultLine label={`Énergie (${intlEnergyRate.toFixed(2)}% sur port)`} value={ecIntl.toFixed(2) + ' €'} />
                   <ResultLine label="Frais de facturation" value={factuIntl.toFixed(2) + ' €'} />
-                  {acIntl > 0 && <ResultLine label="⚠️ ADR Matières dangereuses" value={acIntl.toFixed(2) + ' €'} accent />}
+                  {acIntl > 0 && <ResultLine label="⚠️ ADR Matières dangereuses (15%)" value={acIntl.toFixed(2) + ' €'} accent />}
                   {sc2Intl > 0 && <ResultLine label="Contribution sûreté" value={sc2Intl.toFixed(2) + ' €'} />}
                   <div style={{ margin: '12px 0 6px', padding: '10px 0', borderTop: '2px solid var(--border)' }}>
                     <ResultLine label="TOTAL HT" value={totalHT.toFixed(2) + ' €'} accent bold />
