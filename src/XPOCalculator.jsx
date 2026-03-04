@@ -452,6 +452,7 @@ export default function XPOCalculator() {
   const [gasoilIntl, setGasoilIntl] = useState(6.39);
   const [gazIntl, setGazIntl] = useState(11.95);
   const [sureteIntl, setSureteIntl] = useState(false);
+  const [adrIntl, setAdrIntl] = useState(false);
 
   const [frPostal, setFrPostal] = useState('');
 
@@ -844,6 +845,7 @@ export default function XPOCalculator() {
                   </span>
                 </div>
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <Toggle on={adrIntl} onChange={() => setAdrIntl(!adrIntl)} label="ADR Matières dangereuses" desc="+ 1.45€ / expédition" />
                   <Toggle on={sureteIntl} onChange={() => setSureteIntl(!sureteIntl)} label="Contribution sûreté" desc="+ 0.70€ / expédition" />
                 </div>
               </GlassCard>
@@ -856,7 +858,8 @@ export default function XPOCalculator() {
               const ecIntl = Math.round(basePrice * intlEnergyRate / 100 * 100) / 100;
               const factuIntl = 5.00;
               const sc2Intl = sureteIntl ? 0.70 : 0;
-              const totalHT = Math.round((basePrice + ecIntl + factuIntl + sc2Intl) * 100) / 100;
+              const acIntl = adrIntl ? 1.45 : 0;
+              const totalHT = Math.round((basePrice + ecIntl + factuIntl + sc2Intl + acIntl) * 100) / 100;
               // International = TVA exonérée (intracommunautaire ou export)
               return (
               <GlassCard glow delay={0.15}>
@@ -865,6 +868,7 @@ export default function XPOCalculator() {
                   <ResultLine label="Prix transport grille" value={basePrice.toFixed(2) + ' €'} />
                   <ResultLine label={`Énergie (${intlEnergyRate.toFixed(2)}% sur port)`} value={ecIntl.toFixed(2) + ' €'} />
                   <ResultLine label="Frais de facturation" value={factuIntl.toFixed(2) + ' €'} />
+                  {acIntl > 0 && <ResultLine label="⚠️ ADR Matières dangereuses" value={acIntl.toFixed(2) + ' €'} accent />}
                   {sc2Intl > 0 && <ResultLine label="Contribution sûreté" value={sc2Intl.toFixed(2) + ' €'} />}
                   <div style={{ margin: '12px 0 6px', padding: '10px 0', borderTop: '2px solid var(--border)' }}>
                     <ResultLine label="TOTAL HT" value={totalHT.toFixed(2) + ' €'} accent bold />
