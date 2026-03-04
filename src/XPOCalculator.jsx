@@ -73,6 +73,60 @@ function getZones(country) {
   return all;
 }
 
+// Auto-detect French department from postal code
+function detectFrDept(postalCode, allDepts) {
+  const pc = postalCode.replace(/\s+/g, '');
+  if (pc.length < 2) return null;
+  // Extract first 2 digits
+  const d2 = pc.substring(0, 2);
+  // Special case: 20 = Corse
+  if (d2 === '20') return allDepts.find(d => d.startsWith('20')) || null;
+  // Match department starting with those 2 digits
+  return allDepts.find(d => d.startsWith(d2)) || null;
+}
+
+// Country code prefixes for zone matching
+const ZONE_PREFIX = {
+  "Portugal":"PT","Slovaquie":"SK","Pologne":"PL","Luxembourg":"LU",
+  "Autriche":"AT","Hongrie":"HU","République Tchèque":"CZ","Suisse":"CH",
+  "Belgique":"BE-","Allemagne":"DE-","Espagne":"ES-","Pays-Bas":"NL-","Italie":"IT-",
+  "Royaume-Uni":"GB"
+};
+
+// Auto-detect zone from postal code
+function detectZone(country, postalCode, allZones) {
+  if (!country || !postalCode || !allZones.length) return null;
+  const pc = postalCode.replace(/\s+/g, '').toUpperCase();
+  const prefix = ZONE_PREFIX[country];
+  if (!prefix) return null;
+
+  // Luxembourg = single zone
+  if (country === "Luxembourg") return allZones.includes("LU") ? "LU" : null;
+
+  // UK: extract alpha prefix from postcode (e.g. "SW1A 1AA" → "SW", "AB10 1QR" → "AB", "B1 1BB" → "B")
+  if (country === "Royaume-Uni") {
+    const ukMatch = pc.match(/^([A-Z]{1,2})/);
+    if (!ukMatch) return null;
+    const area = "GB" + ukMatch[1];
+    return allZones.find(z => z === area) || null;
+  }
+
+  // All others: extract first 2 digits from postal code
+  const digitMatch = pc.match(/(\d{2})/);
+  if (!digitMatch) return null;
+  const digits = digitMatch[1];
+
+  // IX countries (PT, SK, PL, AT, HU, CZ, CH): zone = PREFIX + digits (e.g. PT38)
+  if (!prefix.includes("-")) {
+    const candidate = prefix + digits;
+    return allZones.find(z => z === candidate) || null;
+  }
+
+  // IP countries (BE-, DE-, ES-, NL-, IT-): zone = PREFIX + digits + " City" — match start
+  const searchPrefix = prefix + digits;
+  return allZones.find(z => z.startsWith(searchPrefix)) || null;
+}
+
 function getCountries() {
   const all = [...new Set([...Object.keys(IP), ...Object.keys(IX)])];
   all.sort((a,b) => a.localeCompare(b, 'fr'));
@@ -391,12 +445,15 @@ export default function XPOCalculator() {
   // International state
   const [country, setCountry] = useState('');
   const [zone, setZone] = useState('');
+  const [postalCode, setPostalCode] = useState('');
   const [weight, setWeight] = useState(200);
   // International energy (same 3 components shared)
   const [elecIntl, setElecIntl] = useState(1.76);
   const [gasoilIntl, setGasoilIntl] = useState(6.39);
   const [gazIntl, setGazIntl] = useState(11.95);
   const [sureteIntl, setSureteIntl] = useState(false);
+
+  const [frPostal, setFrPostal] = useState('');
 
   const depts = useMemo(() => Object.keys(FR_T).sort(), []);
   const countries = useMemo(() => getCountries(), []);
@@ -532,7 +589,46 @@ export default function XPOCalculator() {
             <GlassCard delay={0}>
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
                 letterSpacing: 2.5, color: 'var(--textDim)', marginBottom: 12 }}>
-                🚚 Destination
+                📮 Code postal → Détection automatique
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                <div style={{ flex: 1 }}>
+                  <input
+                    value={frPostal}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setFrPostal(val);
+                      const detected = detectFrDept(val, depts);
+                      if (detected) setDept(detected);
+                    }}
+                    placeholder="Ex: 13100, 75008, 69001..."
+                    style={{
+                      width: '100%', padding: '12px 16px',
+                      background: 'var(--inputBg)', border: '1.5px solid var(--border)',
+                      borderRadius: 10, color: 'var(--text)', fontSize: 15,
+                      fontFamily: 'JetBrains Mono', fontWeight: 600,
+                      outline: 'none', letterSpacing: 2,
+                    }}
+                    onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = 'var(--inputFocusGlow)'; }}
+                    onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
+                  />
+                </div>
+                {dept && frPostal && (
+                  <div style={{
+                    padding: '10px 14px', borderRadius: 10,
+                    background: 'var(--emeraldGlow)', border: '1px solid var(--emerald)',
+                    fontFamily: 'JetBrains Mono', fontSize: 12, fontWeight: 700,
+                    color: 'var(--emerald)', whiteSpace: 'nowrap',
+                    animation: 'countUp 0.3s ease both',
+                  }}>
+                    ✓ {dept.substring(0, 5)}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: 12, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: 2.5, color: 'var(--textDim)', marginBottom: 8 }}>
+                📍 Département {dept ? '(détecté)' : '— sélection manuelle'}
               </div>
               <SearchSelect options={depts} value={dept} onChange={setDept}
                 placeholder="Sélectionner un département" icon="📍" />
@@ -644,7 +740,7 @@ export default function XPOCalculator() {
               <SearchSelect
                 options={countries.map(c => `${FLAGS[c] || '🏳️'} ${c}`)}
                 value={country ? `${FLAGS[country] || '🏳️'} ${country}` : ''}
-                onChange={v => { const name = v.replace(/^[^\s]+ /, ''); setCountry(name); setZone(''); }}
+                onChange={v => { const name = v.replace(/^[^\s]+ /, ''); setCountry(name); setZone(''); setPostalCode(''); }}
                 placeholder="Sélectionner un pays" icon="🌐"
               />
               {country && (
@@ -658,7 +754,53 @@ export default function XPOCalculator() {
               <GlassCard delay={0.05}>
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
                   letterSpacing: 2.5, color: 'var(--textDim)', marginBottom: 12 }}>
-                  📍 Zone / Ville
+                  📮 Code postal → Détection automatique
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      value={postalCode}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setPostalCode(val);
+                        const detected = detectZone(country, val, zones);
+                        if (detected) setZone(detected);
+                      }}
+                      placeholder={country === 'Royaume-Uni' ? 'Ex: SW1A 1AA' : 'Ex: 3885-401'}
+                      style={{
+                        width: '100%', padding: '12px 16px',
+                        background: 'var(--inputBg)', border: '1.5px solid var(--border)',
+                        borderRadius: 10, color: 'var(--text)', fontSize: 15,
+                        fontFamily: 'JetBrains Mono', fontWeight: 600,
+                        outline: 'none', letterSpacing: 1,
+                      }}
+                      onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = 'var(--inputFocusGlow)'; }}
+                      onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
+                    />
+                  </div>
+                  {zone && postalCode && (
+                    <div style={{
+                      padding: '10px 16px', borderRadius: 10,
+                      background: 'var(--emeraldGlow)', border: '1px solid var(--emerald)',
+                      fontFamily: 'JetBrains Mono', fontSize: 14, fontWeight: 700,
+                      color: 'var(--emerald)', whiteSpace: 'nowrap',
+                      animation: 'countUp 0.3s ease both',
+                    }}>
+                      ✓ {zone}
+                    </div>
+                  )}
+                </div>
+                {postalCode && !zone && (
+                  <div style={{ marginTop: 8, padding: '6px 12px', borderRadius: 'var(--radiusXs)',
+                    background: 'var(--amberGlow)', border: '1px solid var(--amber)',
+                    fontSize: 11, color: 'var(--amber)' }}>
+                    Zone non trouvée — sélectionnez manuellement ci-dessous
+                  </div>
+                )}
+
+                <div style={{ marginTop: 12, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: 2.5, color: 'var(--textDim)', marginBottom: 8 }}>
+                  📍 Zone {zone ? '(détectée)' : '/ Ville — sélection manuelle'}
                 </div>
                 <SearchSelect options={zones} value={zone} onChange={setZone}
                   placeholder="Sélectionner une zone" icon="🎯" />
