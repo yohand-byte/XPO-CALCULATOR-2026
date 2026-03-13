@@ -13,7 +13,7 @@ const PAL_COUNTRIES = new Set(Object.keys(IP));
 const KG_COUNTRIES = new Set(Object.keys(IX));
 
 // ============ LOGIC ============
-function calcFR({dept, pal, prem, tgt, rdv, month, gas}) {
+function calcFR({dept, pal, prem, tgt, rdv, adr, month, gas}) {
   if (!FR_T[dept] || pal <= 0) return null;
   let idx = -1, mp = null;
   for (let i = 0; i < FR_P.length; i++) { if (pal <= FR_P[i]) { idx = i; mp = FR_P[i]; break; } }
@@ -22,8 +22,10 @@ function calcFR({dept, pal, prem, tgt, rdv, month, gas}) {
   const ff=2.05, pc=prem?Math.max(b*0.30,30):0, tc=tgt?Math.min(Math.max(b*0.15,25),40):0, rc=rdv?5:0;
   const dC=dept.substring(0,2), isSeas=SEAS.includes(dC), inSeas=month>=4&&month<=8;
   const sc=(isSeas&&inSeas)?Math.round(b*0.15*100)/100:0;
-  const sub=b+ff+pc+tc+rc+sc, gc=Math.round(sub*(gas/100)*100)/100;
-  return { b,ff,pc,tc,rc,sc,gc,sub,tot:Math.round((sub+gc+1.45+0.60)*100)/100,isSeas,inSeas,mp };
+  const sub=b+ff+pc+tc+rc+sc;
+  const ac=adr?Math.round(sub*0.15*100)/100:0;
+  const gc=Math.round((sub+ac)*(gas/100)*100)/100;
+  return { b,ff,pc,tc,rc,sc,ac,gc,sub,tot:Math.round((sub+ac+gc+1.45+0.60)*100)/100,isSeas,inSeas,mp };
 }
 
 function findKg(data,region,kg) {
@@ -185,9 +187,10 @@ function FranceTab() {
   const [prem,setPrem]=useState(false);
   const [tgt,setTgt]=useState(false);
   const [rdv,setRdv]=useState(false);
+  const [adr,setAdr]=useState(false);
   const [mo,setMo]=useState(new Date().getMonth()+1);
   const [gas,setGas]=useState(5.79);
-  const r=calcFR({dept,pal,prem,tgt,rdv,month:mo,gas});
+  const r=calcFR({dept,pal,prem,tgt,rdv,adr,month:mo,gas});
   const nm=dept.split(' - ')[1]||dept;
 
   return (
@@ -228,6 +231,7 @@ function FranceTab() {
         <Toggle on={prem} onChange={()=>setPrem(!prem)} label="Premium · +30€ min. ou 30%" />
         <Toggle on={tgt} onChange={()=>setTgt(!tgt)} label="Target · +15€ (25–40€)" />
         <Toggle on={rdv} onChange={()=>setRdv(!rdv)} label="Prise de RDV · +5€" />
+        <Toggle on={adr} onChange={()=>setAdr(!adr)} label="Matières dangereuses ADR · +15%" />
 
         <div style={{height:14}} />
         <Label>Surcharge gas-oil</Label>
@@ -272,6 +276,7 @@ function FranceTab() {
             {r.tc>0&&<PriceRow label="Option Target" value={r.tc} />}
             {r.rc>0&&<PriceRow label="Rendez-vous" value={r.rc} />}
             {r.sc>0&&<PriceRow label="Majoration saisonnière · 15%" value={r.sc} />}
+            {r.ac>0&&<PriceRow label="Matières dangereuses ADR · 15%" value={r.ac} />}
             <PriceRow dash />
             <PriceRow label={`Surcharge gas-oil · ${gas}%`} value={r.gc} />
             <PriceRow label="Taxe traitement commandes" value={1.45} />
@@ -315,6 +320,7 @@ function InterTab() {
   const [pal,setPal]=useState(1);
   const [kg,setKg]=useState(500);
   const [sur,setSur]=useState(true);
+  const [adr,setAdr]=useState(false);
 
   const isPal = PAL_COUNTRIES.has(co);
   const isKg = KG_COUNTRIES.has(co);
@@ -333,7 +339,8 @@ function InterTab() {
     return null;
   },[data,sel,pal,kg,isPal,isKg]);
 
-  const totalHT = res && res.price != null ? Math.round((res.price+(sur?0.70:0))*100)/100 : null;
+  const adrAmount = (res && res.price != null && adr) ? Math.round(res.price*0.15*100)/100 : 0;
+  const totalHT = res && res.price != null ? Math.round((res.price+adrAmount+(sur?0.70:0))*100)/100 : null;
 
   return (
     <div style={{display:'grid',gridTemplateColumns:'360px 1fr',gap:20,alignItems:'start'}}>
@@ -395,6 +402,7 @@ function InterTab() {
         </>)}
 
         <Toggle on={sur} onChange={()=>setSur(!sur)} label="Contribution sûreté · 0,70 €" />
+        <Toggle on={adr} onChange={()=>setAdr(!adr)} label="Matières dangereuses ADR · +15%" />
       </Card>
 
       <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -431,13 +439,14 @@ function InterTab() {
           </div>
           {res?(<>
             <PriceRow label={isPal ? `Transport · ${res.mp} pal.` : `Transport · ${res.bracket}`} value={res.price} />
+            {adr&&<PriceRow label="Matières dangereuses ADR · 15%" value={adrAmount} />}
             {sur&&<PriceRow label="Contribution sûreté" value={0.70} />}
             <div style={{borderTop:'2px solid var(--ruby)',margin:'12px 0'}} />
             <PriceRow label="Total hors taxes" value={totalHT} big />
             <div style={{marginTop:16,padding:'14px 18px',borderRadius:'var(--radiusSm)',
               background:'var(--sagePale)',border:'1px solid rgba(90,122,100,0.12)',fontSize:12,color:'var(--sage)',lineHeight:1.6}}>
               Hors surcharges variables : carburant (indexé CNR mensuel), enlèvement extérieur (35 €), 
-              matières dangereuses ADR (15%), douanes UK (75 + 90 €).
+              douanes UK (75 + 90 €).
             </div>
           </>):<div style={{textAlign:'center',padding:24,color:'var(--inkLight)',fontFamily:'Cormorant Garamond',fontStyle:'italic',fontSize:16}}>—</div>}
         </Card>
