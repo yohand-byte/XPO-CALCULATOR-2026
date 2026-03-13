@@ -19,13 +19,16 @@ function calcFR({dept, pal, prem, tgt, rdv, adr, month, gas}) {
   for (let i = 0; i < FR_P.length; i++) { if (pal <= FR_P[i]) { idx = i; mp = FR_P[i]; break; } }
   if (idx === -1) return { err: "Maximum 6 palettes — contactez XPO pour un devis sur mesure." };
   const b = FR_T[dept][idx]; if (!b) return { err: "Tarif indisponible" };
-  const ff=2.05, pc=prem?Math.max(b*0.30,30):0, tc=tgt?Math.min(Math.max(b*0.15,25),40):0, rc=rdv?5:0;
+  const ff=2.05;
+  const pc=prem?Math.round(Math.max(b*0.30,30)*100)/100:0;
+  const tc=tgt?Math.round(Math.min(Math.max(b*0.15,25),40)*100)/100:0;
+  const rc=rdv?5:0;
   const dC=dept.substring(0,2), isSeas=SEAS.includes(dC), inSeas=month>=4&&month<=8;
   const sc=(isSeas&&inSeas)?Math.round(b*0.15*100)/100:0;
-  const sub=b+ff+pc+tc+rc+sc;
+  const sub=Math.round((b+ff+pc+tc+rc+sc)*100)/100;
+  const gc=Math.round(sub*(gas/100)*100)/100;
   const ac=adr?Math.round(sub*0.15*100)/100:0;
-  const gc=Math.round((sub+ac)*(gas/100)*100)/100;
-  return { b,ff,pc,tc,rc,sc,ac,gc,sub,tot:Math.round((sub+ac+gc+1.45+0.60)*100)/100,isSeas,inSeas,mp };
+  return { b,ff,pc,tc,rc,sc,ac,gc,sub,tot:Math.round((sub+gc+ac+1.45+0.60)*100)/100,isSeas,inSeas,mp,prem,tgt,rdv:!!rdv,adr:!!adr };
 }
 
 function findKg(data,region,kg) {
@@ -272,11 +275,11 @@ function FranceTab() {
           {r&&!r.err?(<>
             <PriceRow label={`Tarif de base · ${r.mp} pal.`} value={r.b} />
             <PriceRow label="Frais fixes d'expédition" value={r.ff} />
-            {r.pc>0&&<PriceRow label="Option Premium" value={r.pc} />}
-            {r.tc>0&&<PriceRow label="Option Target" value={r.tc} />}
-            {r.rc>0&&<PriceRow label="Rendez-vous" value={r.rc} />}
-            {r.sc>0&&<PriceRow label="Majoration saisonnière · 15%" value={r.sc} />}
-            {r.ac>0&&<PriceRow label="Matières dangereuses ADR · 15%" value={r.ac} />}
+            <PriceRow label="Option Premium" value={r.pc} />
+            <PriceRow label="Option Target" value={r.tc} />
+            <PriceRow label="Prise de rendez-vous" value={r.rc} />
+            <PriceRow label="Ajustement saisonnier · 15%" value={r.sc} />
+            <PriceRow label="Matières dangereuses ADR · 15%" value={r.ac} />
             <PriceRow dash />
             <PriceRow label={`Surcharge gas-oil · ${gas}%`} value={r.gc} />
             <PriceRow label="Taxe traitement commandes" value={1.45} />
@@ -321,9 +324,13 @@ function InterTab() {
   const [kg,setKg]=useState(500);
   const [sur,setSur]=useState(true);
   const [adr,setAdr]=useState(false);
+  const [gas,setGas]=useState(5.79);
+  const [enl,setEnl]=useState(false);
+  const [douUK,setDouUK]=useState(false);
 
   const isPal = PAL_COUNTRIES.has(co);
   const isKg = KG_COUNTRIES.has(co);
+  const isUK = co==='Royaume-Uni';
 
   const regions=useMemo(()=>{
     if(IP[co]) return Object.keys(IP[co]);
@@ -339,8 +346,13 @@ function InterTab() {
     return null;
   },[data,sel,pal,kg,isPal,isKg]);
 
-  const adrAmount = (res && res.price != null && adr) ? Math.round(res.price*0.15*100)/100 : 0;
-  const totalHT = res && res.price != null ? Math.round((res.price+adrAmount+(sur?0.70:0))*100)/100 : null;
+  const basePrice = res && res.price != null ? res.price : null;
+  const adrAmount = basePrice!=null && adr ? Math.round(basePrice*0.15*100)/100 : 0;
+  const enlAmount = enl ? 35 : 0;
+  const douAmount = (isUK && douUK) ? 165 : 0;
+  const subInter = basePrice!=null ? Math.round((basePrice+adrAmount+enlAmount+douAmount)*100)/100 : null;
+  const gcInter = subInter!=null ? Math.round(subInter*(gas/100)*100)/100 : 0;
+  const totalHT = subInter!=null ? Math.round((subInter+gcInter+1.45+(sur?0.70:0))*100)/100 : null;
 
   return (
     <div style={{display:'grid',gridTemplateColumns:'360px 1fr',gap:20,alignItems:'start'}}>
@@ -403,6 +415,16 @@ function InterTab() {
 
         <Toggle on={sur} onChange={()=>setSur(!sur)} label="Contribution sûreté · 0,70 €" />
         <Toggle on={adr} onChange={()=>setAdr(!adr)} label="Matières dangereuses ADR · +15%" />
+        <Toggle on={enl} onChange={()=>setEnl(!enl)} label="Enlèvement extérieur · +35 €" />
+        {isUK&&<Toggle on={douUK} onChange={()=>setDouUK(!douUK)} label="Douanes UK · 75 + 90 €" />}
+
+        <div style={{height:14}} />
+        <Label>Surcharge gas-oil</Label>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <Input type="number" value={gas} onChange={e=>setGas(Number(e.target.value))} step={0.01} mono
+            style={{width:90,textAlign:'center'}} />
+          <span style={{color:'var(--inkLight)',fontSize:13}}>%</span>
+        </div>
       </Card>
 
       <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -438,16 +460,16 @@ function InterTab() {
             <span style={{fontSize:14,fontWeight:600,color:'var(--inkSoft)',letterSpacing:0.3}}>Détail du tarif</span>
           </div>
           {res?(<>
-            <PriceRow label={isPal ? `Transport · ${res.mp} pal.` : `Transport · ${res.bracket}`} value={res.price} />
-            {adr&&<PriceRow label="Matières dangereuses ADR · 15%" value={adrAmount} />}
-            {sur&&<PriceRow label="Contribution sûreté" value={0.70} />}
+            <PriceRow label={isPal ? `Tarif de base · ${res.mp} pal.` : `Tarif de base · ${res.bracket}`} value={basePrice} />
+            <PriceRow label="Matières dangereuses ADR · 15%" value={adrAmount} />
+            <PriceRow label="Enlèvement extérieur" value={enlAmount} />
+            {isUK&&<PriceRow label="Douanes UK · dossier + transit" value={douAmount} />}
+            <PriceRow dash />
+            <PriceRow label={`Surcharge gas-oil · ${gas}%`} value={gcInter} />
+            <PriceRow label="Taxe traitement commandes" value={1.45} />
+            <PriceRow label="Contribution sûreté" value={sur?0.70:0} />
             <div style={{borderTop:'2px solid var(--ruby)',margin:'12px 0'}} />
             <PriceRow label="Total hors taxes" value={totalHT} big />
-            <div style={{marginTop:16,padding:'14px 18px',borderRadius:'var(--radiusSm)',
-              background:'var(--sagePale)',border:'1px solid rgba(90,122,100,0.12)',fontSize:12,color:'var(--sage)',lineHeight:1.6}}>
-              Hors surcharges variables : carburant (indexé CNR mensuel), enlèvement extérieur (35 €), 
-              douanes UK (75 + 90 €).
-            </div>
           </>):<div style={{textAlign:'center',padding:24,color:'var(--inkLight)',fontFamily:'Cormorant Garamond',fontStyle:'italic',fontSize:16}}>—</div>}
         </Card>
 
