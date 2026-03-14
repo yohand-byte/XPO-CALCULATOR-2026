@@ -112,10 +112,14 @@ function FranceTab(){
 function InterTab(){
   const palCountries=Object.keys(IP).sort();
   const kgCountries=Object.keys(IX).sort();
-  const allCountries=useMemo(()=>[...new Set([...palCountries.map(c=>c+' 🚛'),...kgCountries.map(c=>c+' ⚖️')])].sort(),[]);
-  const[raw,setRaw]=useState(palCountries[0]+' 🚛');
-  const co=raw.replace(/ [🚛⚖️]/g,'').trim();
-  const isPal=raw.includes('🚛');
+  const options=useMemo(()=>[
+    ...palCountries.map(c=>({val:"P:"+c,label:c+" (palettes)",co:c,isPal:true})),
+    ...kgCountries.map(c=>({val:"K:"+c,label:c+" (poids kg)",co:c,isPal:false}))
+  ].sort((a,b)=>a.co.localeCompare(b.co)),[]);
+  const[sel0,setSel0]=useState(options[0]?.val||"");
+  const cur=options.find(o=>o.val===sel0)||options[0];
+  const co=cur?.co||"";
+  const isPal=cur?.isPal??true;
   const[reg,setReg]=useState("");
   const[pal,setPal]=useState(1);
   const[kg,setKg]=useState(500);
@@ -149,10 +153,10 @@ function InterTab(){
   return<div style={{display:'grid',gridTemplateColumns:'380px 1fr',gap:20,alignItems:'start'}}>
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
       <Card><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:22}}><div style={{width:28,height:28,borderRadius:8,background:'var(--rubyPale)',display:'flex',alignItems:'center',justifyContent:'center'}}>🌍</div><span style={{fontSize:14,fontWeight:600,color:'var(--inkSoft)'}}>International</span></div>
-        <Label>Pays (🚛 palettes · ⚖️ poids)</Label>
-        <select value={raw} onChange={e=>{setRaw(e.target.value);setReg("")}} style={{width:'100%',padding:'11px 16px',background:'var(--cream)',border:'1.5px solid var(--sandDark)',borderRadius:'var(--radiusSm)',color:'var(--ink)',fontSize:14,outline:'none',fontFamily:'Figtree',cursor:'pointer',appearance:'none',backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a7f72' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,backgroundRepeat:'no-repeat',backgroundPosition:'right 14px center'}}>
-          <optgroup label="Palettes (mars 2026)">{palCountries.map(c=><option key={c+'p'} value={c+' 🚛'}>{c} 🚛</option>)}</optgroup>
-          <optgroup label="Poids kg (janvier 2025)">{kgCountries.map(c=><option key={c+'k'} value={c+' ⚖️'}>{c} ⚖️</option>)}</optgroup>
+        <Label>Pays</Label>
+        <select value={sel0} onChange={e=>{setSel0(e.target.value);setReg("")}} style={{width:'100%',padding:'11px 16px',background:'var(--cream)',border:'1.5px solid var(--sandDark)',borderRadius:'var(--radiusSm)',color:'var(--ink)',fontSize:14,outline:'none',fontFamily:'Figtree',cursor:'pointer',appearance:'none',backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a7f72' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,backgroundRepeat:'no-repeat',backgroundPosition:'right 14px center'}}>
+          <optgroup label="Palettes (mars 2026)">{palCountries.map(c=><option key={"P:"+c} value={"P:"+c}>{c} (palettes)</option>)}</optgroup>
+          <optgroup label="Poids kg (janvier 2025)">{kgCountries.map(c=><option key={"K:"+c} value={"K:"+c}>{c} (kg)</option>)}</optgroup>
         </select>
         <div style={{height:14}}/><Label>Zone ({regions.length})</Label>
         <SL items={regions} value={sel} onChange={v=>setReg(v)} placeholder="Filtrer..." h={200}/>
