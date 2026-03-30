@@ -94,10 +94,9 @@ export default function XPOCalculator() {
     const w = [];
     if (poids > maxKgPerPal) w.push(`Poids ${poids}kg dépasse le max ${maxKgPerPal}kg pour palette ${PAL_FORMATS[palFormat].label}`);
     if (palettes === 0.5 && poids >= 200) w.push("Demi-palette (0.5): le poids doit être < 200 kg/pal selon la grille XPO");
-    if (poidsTotal > 800) w.push(`Poids total ${poidsTotal}kg dépasse la limite VL de 800kg/envoi`);
-    if (palettes > 6) w.push("Maximum 6 palettes 80×120 par envoi");
+    if (palettes > 6) w.push("Maximum 6 palettes par envoi (grille XPO)");
     return w;
-  }, [poids, palettes, maxKgPerPal, palFormat, poidsTotal]);
+  }, [poids, palettes, maxKgPerPal, palFormat]);
 
   const handleCountryChange = (cc) => {
     setInterCountry(cc);
@@ -226,8 +225,7 @@ export default function XPOCalculator() {
               <label style={s.label}>Poids par palette (kg) — max {maxKgPerPal}kg/{PAL_FORMATS[palFormat].label}</label>
               <input type="number" min="1" max={maxKgPerPal} value={poids} onChange={e=>setPoids(Math.max(1,parseInt(e.target.value)||1))} style={{...s.input, borderColor:poids>maxKgPerPal?"#cc0000":"#d0d0d0"}} />
               <div style={{ fontSize:"11px", color:"#999", marginTop:"4px" }}>
-                Poids total: <strong style={{color:poidsTotal>800?"#cc0000":"#333"}}>{poidsTotal.toLocaleString("fr-FR")} kg</strong> ({palettes === 0.5 ? "1" : palettes} pal × {poids} kg)
-                {poidsTotal > 800 && <span style={{color:"#cc0000", marginLeft:"8px"}}>⚠ Limite VL: 800kg</span>}
+                Poids total: <strong style={{color:poids>maxKgPerPal?"#cc0000":"#333"}}>{poidsTotal.toLocaleString("fr-FR")} kg</strong> ({palettes === 0.5 ? "1" : palettes} pal × {poids} kg)
               </div>
               {/* Weight warnings */}
               {warnings.length > 0 && (
@@ -285,7 +283,7 @@ export default function XPOCalculator() {
                 {priceData.isFrance ? `France • ${frDept} ${FR_NAMES[frDept]}` : `${INTER[interCountry].name} • ${interZone}`}
               </div>
               <div style={{ fontSize:"12px", color:"#999" }}>
-                {palettes} pal {PAL_FORMATS[palFormat].label} × {poids} kg = <strong style={{color:poidsTotal>800?"#cc0000":"inherit"}}>{poidsTotal.toLocaleString("fr-FR")} kg</strong>
+                {palettes} pal {PAL_FORMATS[palFormat].label} × {poids} kg = <strong style={{color:poids>maxKgPerPal?"#cc0000":"inherit"}}>{poidsTotal.toLocaleString("fr-FR")} kg</strong>
               </div>
             </div>
 
